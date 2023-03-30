@@ -498,6 +498,7 @@ public class TestDependencyMojo extends AbstractHpiMojo {
         for (MavenArtifact mavenArtifact : mavenArtifacts) {
             Scm scm;
             try {
+                getLog().info("Resolving POM for " + mavenArtifact.getId());
                 scm = mavenArtifact.resolvePom().getScm();
             } catch (ProjectBuildingException e) {
                 throw new MojoExecutionException("Failed to resolve POM for artifact " + mavenArtifact, e);
@@ -555,7 +556,8 @@ public class TestDependencyMojo extends AbstractHpiMojo {
         }
     }
 
-    private static String tagToHash(String name, String tag, GitHub github) {
+    private String tagToHash(String name, String tag, GitHub github) {
+        getLog().info("Resolving tag for " + name);
         try {
             GHRepository repo = github.getRepository(name);
             GHRef ref = repo.getRef("tags/" + tag);
