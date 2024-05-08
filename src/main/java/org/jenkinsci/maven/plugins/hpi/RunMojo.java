@@ -80,20 +80,22 @@ import org.apache.maven.project.ProjectDependenciesResolver;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.graph.DependencyFilter;
 import org.eclipse.aether.util.filter.ScopeDependencyFilter;
+import org.eclipse.jetty.ee8.maven.plugin.JettyRunWarMojo;
+import org.eclipse.jetty.ee8.maven.plugin.MavenServerConnector;
+import org.eclipse.jetty.ee8.maven.plugin.MavenWebAppContext;
+import org.eclipse.jetty.ee8.webapp.Configuration;
+import org.eclipse.jetty.ee8.webapp.Configurations;
+import org.eclipse.jetty.ee8.webapp.WebAppClassLoader;
+import org.eclipse.jetty.ee8.webapp.WebAppContext;
+import org.eclipse.jetty.ee8.websocket.server.config.JettyWebSocketServletContainerInitializer;
 import org.eclipse.jetty.http.HttpCompliance;
 import org.eclipse.jetty.http.UriCompliance;
-import org.eclipse.jetty.maven.plugin.JettyRunWarMojo;
-import org.eclipse.jetty.maven.plugin.MavenServerConnector;
-import org.eclipse.jetty.maven.plugin.MavenWebAppContext;
 import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.security.UserStore;
+import org.eclipse.jetty.server.FormFields;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.handler.ContextHandler;
 import org.eclipse.jetty.util.security.Password;
-import org.eclipse.jetty.webapp.WebAppClassLoader;
-import org.eclipse.jetty.webapp.WebAppContext;
-import org.eclipse.jetty.websocket.server.config.JettyWebSocketServletContainerInitializer;
 import org.twdata.maven.mojoexecutor.MojoExecutor;
 import sun.misc.Unsafe;
 
@@ -317,7 +319,7 @@ public class RunMojo extends JettyRunWarMojo {
         // auto-enable stapler trace, unless otherwise configured already.
         setSystemPropertyIfEmpty("stapler.trace", "true");
         // allow Jetty to accept a bigger form so that it can handle update center JSON post
-        setSystemPropertyIfEmpty(ContextHandler.MAX_FORM_CONTENT_SIZE_KEY, "-1");
+        setSystemPropertyIfEmpty(FormFields.MAX_LENGTH_ATTRIBUTE, "-1");
         // general-purpose system property so that we can tell from Jenkins if we are running in the hpi:run mode.
         setSystemPropertyIfEmpty("hudson.hpi.run", "true");
         // expose the current top-directory of the plugin
@@ -612,6 +614,13 @@ public class RunMojo extends JettyRunWarMojo {
             FileUtils.deleteDirectory(extractedWebAppDir);
         }
         getWebAppConfig().setWar(webAppFile.getCanonicalPath());
+        // Preload the default configurations, since by the time we get to WebAppContext#loadConfigurations (from
+        // WebAppContext#preConfigure) we will already be using JettyAndServletApiOnlyClassLoader (via
+        // ContextHandler.CoreContextHandler#doStart), whose parent class WebAppClassLoader does not have access to the
+        // requisite server classes from which to load the configurations.
+        for (Configuration configuration : Configurations.getServerDefault(server)) {
+            webApp.addConfiguration(configuration);
+        }
         super.configureWebApp();
         for (Artifact a : project.getArtifacts()) {
             if (a.getGroupId().equals("org.jenkins-ci.main")
